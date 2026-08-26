@@ -1,0 +1,15 @@
+{
+  "originHash" : "3853e08f09a62eb6053655b85e060f539a45bcff63dba15794ff642b43a5d980",
+  "pins" : [
+    {
+      "identity" : "stellar-ios-mac-sdk",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Soneso/stellar-ios-mac-sdk.git",
+      "state" : {
+        "revision" : "e82d6508e8ae3e2000bc3c1070a27771cfafe2f7",
+        "version" : "3.10.0"
+      }
+    }
+  ],
+  "version" : 3
+}

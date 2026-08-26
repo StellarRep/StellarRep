@@ -1,0 +1,21 @@
+# Rust / Soroban
+target/
+
+# Xcode / SPM
+.build/
+DerivedData/
+.DerivedData/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+.swiftpm/
+
+# macOS
+.DS_Store
+
+# Secrets — never committed, ever
+*.pem
+*.key
+*secret*
+.env
