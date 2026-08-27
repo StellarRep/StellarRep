@@ -45,7 +45,6 @@ app/
 │   │       └── SettingsView.swift          // network indicator, key export/backup warnings
 │   └── Resources/
 │       └── Assets.xcassets
-├── Generated/                              // Phase 3 output, if stellar-contract-bindings is used — gitignore or commit deliberately, your call
 └── Tests/StellarRepTests/
     ├── ReputationServiceTests.swift        // mocked service, no network
     └── KeychainWalletManagerTests.swift
@@ -61,7 +60,9 @@ protocol ReputationServiceProtocol {
 }
 ```
 
-`registerWorker` and `submitReview` go through the full Soroban transaction lifecycle: simulate → sign locally with the provided `KeyPair` → submit → poll until confirmed. `getReputation` is simulate-only — no signature, no fee, no submitted transaction.
+`registerWorker` and `submitReview` go through the full Soroban transaction lifecycle: simulate → sign locally with the provided `KeyPair` → submit → poll until confirmed. `getReputation` is simulate-only — no signature, no fee, no submitted transaction. Confirmed manually against the live testnet contract in Phase 3 (see `contracts/reputation/DEPLOYED.md`).
+
+**Phase 3 finding:** `stellar-contract-bindings swift` (0.5.0b0, latest on PyPI) fails to parse this contract's spec against `soroban-sdk` 27.0.6 (`Unexpected trailing 2192 bytes in XDR data` — see `DEPLOYED.md` for detail). So `ReputationServiceProtocol` above will be hand-written directly on `stellarsdk` in Phase 5, not generated.
 
 Consider generating a typed client from the deployed contract in Phase 3 (`stellar-contract-bindings swift`) and using it as `ReputationService`'s implementation rather than hand-encoding contract call parameters — but treat the hand-written protocol above as the app-facing interface either way, so ViewModels never depend directly on generated code or on `stellarsdk` types.
 
