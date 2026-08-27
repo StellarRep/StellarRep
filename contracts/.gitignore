@@ -4,3 +4,6 @@ target
 # Local settings
 .soroban
 .stellar
+
+# Auto-generated per-test ledger snapshots (soroban-sdk testutils)
+test_snapshots/

@@ -38,8 +38,12 @@ pub enum DataKey {
 ## Errors
 
 ```rust
+// Confirmed against soroban-sdk 27.0.6 in Phase 1: #[contracterror] requires
+// #[repr(u32)] plus Debug/Eq/PartialEq derives — #[derive(Clone, Copy)] alone
+// (as an earlier draft of this doc had it) doesn't compile.
 #[contracterror]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u32)]
 pub enum Error {
     AlreadyRegistered = 1,
     NotRegistered = 2,
@@ -54,12 +58,14 @@ pub enum Error {
 ```rust
 #[contractevent]
 pub struct WorkerRegistered {
+    #[topic]
     pub worker: Address,
     pub timestamp: u64,
 }
 
 #[contractevent]
 pub struct ReviewSubmitted {
+    #[topic]
     pub worker: Address,
     pub reviewer: Address,
     pub job_id: Symbol,
@@ -67,7 +73,11 @@ pub struct ReviewSubmitted {
 }
 ```
 
-`#[contractevent]` is a relatively recent macro — some SDK versions distinguish which fields are indexed "topics" vs. plain data. Check current usage before assuming every field here should be treated the same way.
+Confirmed in Phase 1 against soroban-sdk 27.0.6: `#[topic]` marks which fields are indexed vs. plain data (here, `worker`, since that's what callers will want to filter events by), and emitting one is not a bare struct literal — construct it and call `.publish(&env)`:
+
+```rust
+WorkerRegistered { worker, timestamp }.publish(&env);
+```
 
 ## Functions
 
