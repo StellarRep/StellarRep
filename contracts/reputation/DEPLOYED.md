@@ -19,9 +19,13 @@
 
 Confirmed on-chain state actually changed, not just that the CLI returned success: `get_reputation` after `submit_review` reflects the review (`total_jobs` went 0→1, `rating_sum` went 0→5), and `get_reviews` returns the exact review just submitted.
 
-### Swift bindings generation — attempted, not usable yet
+### Swift bindings generation — resolved
 
-`stellar-contract-bindings` (0.5.0b0, the latest available on PyPI as of this writing) fails against this contract's spec: `Get contract specs failed: Unexpected trailing 2192 bytes in XDR data`. This looks like the tool's XDR contract-spec parser hasn't caught up with a newer entry kind — plausibly the ones `#[contractevent]` (a relatively new macro, per `docs/CONTRACT_SPEC.md`) adds under `soroban-sdk` 27.0.6. Not pursued further since it's explicitly optional in `docs/ROADMAP.md` Phase 3, and the roadmap's own caution ("sanity-check the output actually compiles before relying on it") is moot if it doesn't generate at all. `ReputationService` in Phase 5 will be hand-written on top of `stellarsdk` directly instead. Worth filing as an upstream issue (lightsail-network/stellar-contract-bindings) once this repo has a GitHub remote to reference from.
+`stellar-contract-bindings` 0.5.0b0 (the latest on PyPI) failed against this contract's spec with `Get contract specs failed: Unexpected trailing 2192 bytes in XDR data`. Traced to root cause rather than worked around: `metadata.py::parse_entries` passed the *entire remaining buffer* into a per-entry XDR parser that requires the buffer be fully consumed by exactly one entry — so it broke on any contract with more than one spec entry (i.e. almost any real contract), not something specific to this one.
+
+Both this bug and a second one hit right after (multi-line `///` doc comments on contract items collapse onto one line, so continuation lines leak into the generated Swift as raw, uncommented source and fail to compile) were **already fixed on the upstream `main` branch** — `43fd4b9` and `c1b69d0` respectively — just not yet cut into a PyPI release. Filed [lightsail-network/stellar-contract-bindings#38](https://github.com/lightsail-network/stellar-contract-bindings/issues/38) asking for a release.
+
+Installed from `main` directly (`pipx install git+https://github.com/lightsail-network/stellar-contract-bindings.git`) instead of PyPI to unblock this now. Regenerated bindings against the live contract above; `app/Sources/StellarRep/Generated/ReputationContract.swift` is committed and confirmed compiling via `swift build`. **Until a new PyPI release ships**, regenerating requires installing from `main` the same way — plain `pipx install stellar-contract-bindings` will reproduce the original failure.
 
 ## Dev identities (Phase 0 / Phase 3)
 
