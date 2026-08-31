@@ -12,42 +12,48 @@ Single external dependency for MVP: [`stellar-ios-mac-sdk`](https://github.com/S
 
 This SDK has full Horizon coverage and full Soroban RPC coverage as of research time (build, sign, simulate, and submit Soroban transactions; query classic account/operation data) with async/await APIs throughout. **Don't build a second, hand-rolled RPC client** — route everything through this SDK.
 
-Deployment target: the SDK's stated minimum is iOS 15 / macOS 12. `app/Package.swift` currently declares `.iOS(.v16)` (plus `.macOS(.v12)` so `swift build` also works on the dev host, since this is an SPM-first package — see below) as a placeholder; revisit against actual SwiftUI/state-management API needs in Phase 4 and record the final decision + reasoning here.
+Deployment target: the SDK's stated minimum is iOS 15 / macOS 12. **Phase 4 decision: iOS 16.** `app/Package.swift` declares `.iOS(.v16)` — chosen alongside the `ObservableObject`/`@Published` state-management decision below (broader-compatibility path over `@Observable`'s iOS 17 floor), with room to spare since nothing built so far actually needs iOS 17 APIs. `.macOS(.v12)` is also declared, but purely so `swift build`/`swift test` work on the dev host directly — it is not a real target platform for this app.
 
 ## Folder structure
 
 **Phase 0 decision: SPM-first.** `app/Package.swift` defines a `StellarRep` library target; there is no `.xcodeproj` in this repo. Confirmed building both via `swift build` (macOS host) and `xcodebuild -scheme StellarRep -destination 'generic/platform=iOS Simulator'` with a bare `import stellarsdk`. Xcode can open the `app/` folder directly (it treats `Package.swift` as an implicit project) for anything needing the Simulator or a UI. Revisit only if Phase 6 UI work turns out to need something SPM-first can't give it (e.g. asset catalogs beyond what SPM resources support, or an actual installable `.app` for device testing).
 
+**Phase 4 correction: the app entry point is its own target, not a subfolder of `StellarRep`.** The tree below originally put `App/StellarRepApp.swift` inside the `StellarRep` library target; that broke `swift test` — SwiftPM links a library target's `@main` type into every target that depends on it, including `StellarRepTests`, producing a duplicate `_main` symbol at link time. `Package.swift` now declares two products/targets: `StellarRep` (the library — Core/Features/everything else, no `@main`) and `StellarRepApp` (depends on `StellarRep`, holds only the entry point). `OnboardingView` had to become `public` for the app target to see it across the module boundary; the same will apply to whatever View Phase 6 wires up as the app's root.
+
 ```
 app/
-├── Package.swift                 (SPM-first — see decision above)
-├── Sources/StellarRep/
-│   ├── App/
-│   │   └── StellarRepApp.swift
-│   ├── Core/
-│   │   ├── KeychainWalletManager.swift    // keypair generation/import, Keychain storage only
-│   │   ├── ReputationService.swift        // wraps the 3 contract calls
-│   │   └── NetworkConfig.swift            // testnet endpoints, network passphrase, Friendbot URL — single source of truth, nothing hardcoded elsewhere
-│   ├── Models/
-│   │   ├── WorkerProfile.swift            // mirrors the contract's WorkerProfile
-│   │   └── Review.swift
-│   ├── Features/
-│   │   ├── Onboarding/
-│   │   │   ├── OnboardingView.swift
-│   │   │   └── OnboardingViewModel.swift
-│   │   ├── Profile/
-│   │   │   ├── ProfileView.swift
-│   │   │   └── ProfileViewModel.swift
-│   │   ├── SubmitReview/
-│   │   │   ├── SubmitReviewView.swift
-│   │   │   └── SubmitReviewViewModel.swift
-│   │   └── Settings/
-│   │       └── SettingsView.swift          // network indicator, key export/backup warnings
-│   └── Resources/
-│       └── Assets.xcassets
-└── Tests/StellarRepTests/
-    ├── ReputationServiceTests.swift        // mocked service, no network
-    └── KeychainWalletManagerTests.swift
+├── Package.swift                 (SPM-first — see decision above; two targets, see App entry point note above)
+├── Sources/
+│   ├── StellarRep/                        (library target — everything below is `import StellarRep`-visible; only what App/ needs is `public`)
+│   │   ├── Core/
+│   │   │   ├── KeychainWalletManager.swift    // keypair generation/import, Keychain storage only — Sendable, no mutable state
+│   │   │   ├── ReputationService.swift        // wraps the 3 contract calls — Phase 5
+│   │   │   └── NetworkConfig.swift            // testnet endpoints, network passphrase, Friendbot URL — single source of truth, nothing hardcoded elsewhere
+│   │   ├── Models/
+│   │   │   ├── WorkerProfile.swift            // mirrors the contract's WorkerProfile — Phase 5
+│   │   │   └── Review.swift
+│   │   ├── Features/
+│   │   │   ├── Onboarding/
+│   │   │   │   ├── OnboardingView.swift       // public — App/ instantiates it
+│   │   │   │   └── OnboardingViewModel.swift
+│   │   │   ├── Profile/
+│   │   │   │   ├── ProfileView.swift
+│   │   │   │   └── ProfileViewModel.swift
+│   │   │   ├── SubmitReview/
+│   │   │   │   ├── SubmitReviewView.swift
+│   │   │   │   └── SubmitReviewViewModel.swift
+│   │   │   └── Settings/
+│   │   │       └── SettingsView.swift          // network indicator, key export/backup warnings
+│   │   ├── Generated/
+│   │   │   └── ReputationContract.swift        // Phase 3 output (stellar-contract-bindings) — see Service layer section below
+│   │   └── Resources/
+│   │       └── Assets.xcassets
+│   └── StellarRepApp/
+│       └── StellarRepApp.swift                 // @main — the only file in this target
+└── Tests/StellarRepTests/                       (depends on StellarRep only, never StellarRepApp)
+    ├── KeychainWalletManagerTests.swift          // fast, offline, real Keychain
+    ├── OnboardingIntegrationTests.swift           // real, unmocked — hits live Friendbot + Horizon
+    └── ReputationServiceTests.swift               // mocked service, no network — Phase 5
 ```
 
 ## Service layer
@@ -75,13 +81,9 @@ Treat the hand-written protocol above as the app-facing interface regardless, so
 
 ## State management
 
-Simple MVVM. Two reasonable choices depending on the deployment target decided in Phase 4:
-- iOS 17+: `@Observable` view models — less boilerplate, newer pattern.
-- iOS 15+ (matches the SDK's stated floor): `ObservableObject` / `@Published` — broader compatibility.
-
-Pick one, don't mix both patterns in the same codebase, and note the choice + reasoning here once Phase 4 makes it.
+**Phase 4 decision: `ObservableObject` / `@Published`, not `@Observable`.** `OnboardingViewModel` is `@MainActor final class OnboardingViewModel: ObservableObject` with a single `@Published private(set) var state: OnboardingState`. Chosen for the broader-compatibility floor (matches the SDK's stated iOS 15 minimum, and we're at iOS 16 — see Dependency setup above) over `@Observable`'s iOS 17 requirement; nothing built so far needed `@Observable`'s reduced boilerplate badly enough to justify raising the floor. Every future ViewModel should follow this same pattern — don't mix the two in this codebase.
 
 ## Testing approach
 
 - **Unit tests** for ViewModels against a mocked `ReputationServiceProtocol` — these should never touch the network, testnet or otherwise, and should run fast enough to execute on every commit.
-- **A small number of real integration tests** (or a manual test script if a full separate test target feels like overkill this early) that hit live testnet — these fulfill Phase 5's "one real end-to-end test" requirement. Keep these clearly separated from the unit test suite (a separate scheme/target, or an explicit flag) so CI can skip them when testnet is flaky without losing unit test coverage.
+- **A small number of real integration tests** (or a manual test script if a full separate test target feels like overkill this early) that hit live testnet — these fulfill Phase 5's "one real end-to-end test" requirement. Keep these clearly separated from the unit test suite (a separate scheme/target, or an explicit flag) so CI can skip them when testnet is flaky without losing unit test coverage. Phase 4 already established the pattern one phase early, since Friendbot + Horizon were both real and easy to test against: `OnboardingIntegrationTests.swift` is a real, unmocked `@Suite` (not `@testable`-mocked) that generates a keypair, funds it via live Friendbot, and asserts the actual 10,000 XLM balance reads back from Horizon — kept in its own file, separate from `KeychainWalletManagerTests`, for exactly the reason above.

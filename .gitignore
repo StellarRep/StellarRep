@@ -10,6 +10,10 @@ DerivedData/
 *.xcodeproj/xcuserdata/
 *.xcodeproj/project.xcworkspace/xcuserdata/
 .swiftpm/
+# stray -save-temps output from ad-hoc xcodebuild invocations
+app/*.d
+app/*.o
+app/*.swiftdeps
 
 # macOS
 .DS_Store
