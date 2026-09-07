@@ -6,16 +6,21 @@ import stellarsdk
 /// else in this codebase should hardcode a Horizon/RPC URL or a network
 /// passphrase — route through here so a future mainnet decision (if it ever
 /// happens) is a one-file change, not a grep-and-replace.
-enum NetworkConfig {
+public enum NetworkConfig {
     /// Always true for this build. Gates anything that must never run
     /// against a real network — e.g. Friendbot funding.
-    static let isTestnet = true
+    public static let isTestnet = true
 
-    static let horizonURL = StellarSDK.testNetUrl
-    static let sorobanRPCURL = "https://soroban-testnet.stellar.org"
-    static let networkPassphrase = Network.testnet.passphrase
+    public static let horizonURL = StellarSDK.testNetUrl
+    public static let sorobanRPCURL = "https://soroban-testnet.stellar.org"
+    public static let networkPassphrase = Network.testnet.passphrase
 
-    static let sdk = StellarSDK(withHorizonUrl: horizonURL)
+    public static let sdk = StellarSDK(withHorizonUrl: horizonURL)
+
+    /// The `reputation` contract's deployed testnet instance — see
+    /// `contracts/reputation/DEPLOYED.md` for the tx hashes and manual
+    /// verification that back this ID.
+    public static let reputationContractId = "CASDNMYRVVFRTCS23GK2M77VP3W2YCB6NXKT33KL5ZIX6VW4W4TYEPOM"
 }
 
 extension HorizonRequestError {
