@@ -2,6 +2,19 @@
 
 > Working name: **StellarRep**. Rename freely — if you do, update this header and the Xcode/SPM product name together so they don't drift apart.
 
+## This is the umbrella repo
+
+StellarRep is split across four repos under the [`StellarRep`](https://github.com/StellarRep) GitHub org:
+
+| Repo | Holds |
+|---|---|
+| [`StellarRep/StellarRep`](https://github.com/StellarRep/StellarRep) | This repo — `CLAUDE.md` (you are here) and top-level project context. No code. |
+| [`StellarRep/contracts`](https://github.com/StellarRep/contracts) | The Soroban `reputation` contract (Rust). |
+| [`StellarRep/app`](https://github.com/StellarRep/app) | The native iOS app (Swift/SwiftUI, SPM-first). |
+| [`StellarRep/docs`](https://github.com/StellarRep/docs) | `ROADMAP.md`, `ARCHITECTURE.md`, `CONTRACT_SPEC.md`, `APP_SPEC.md`. |
+
+This was a **monorepo through Phase 5** (contract + app + docs in one checkout — see the Phase 0 status entry below, and every path mentioned in the phase log through Phase 5 is relative to that single checkout, not to this umbrella repo). It was split after Phase 5 via `git subtree split`, so `contracts/`, `app/`, and `docs/` each carry their own filtered slice of the original commit history into their new repo, rather than starting fresh. If you're picking up work on the contract or the app, clone the relevant repo directly — this one has no source in it anymore.
+
 ## What this is
 
 A native iOS app (Swift) backed by a Soroban smart contract (Rust) that gives gig and freelance workers a **portable, on-chain reputation record on Stellar** — job counts and ratings that live on-chain instead of being locked inside one marketplace's private database. It's being built as a repo submission to the **Stellar Wave Program** (Drips × Stellar Development Foundation): https://www.drips.network/wave/stellar
@@ -24,7 +37,9 @@ Every repo on the approved list at scoping time was TypeScript/web-first with Ru
 
 **Phase 4 — done.** `KeychainWalletManager` implemented (generate/import/load/delete a wallet keypair; secret seed stored only in Keychain via `kSecClassGenericPassword`, `kSecAttrAccessibleAfterFirstUnlock`, never synced to iCloud) and marked `Sendable` (no mutable state, safe to share across actor boundaries). Onboarding flow built: `OnboardingViewModel` (`@MainActor`, drives create-new vs. import-existing, Friendbot funding, and balance loading) and `OnboardingView` (SwiftUI). App entry point (`StellarRepApp`) split into its own SPM target rather than living inside the `StellarRep` library target — SwiftPM links a library's `@main` type into every target that depends on it, including tests, so `@main` inside `StellarRep` broke `swift test` with a duplicate `_main` symbol; `Package.swift` now declares `StellarRep` (library, no `@main`) and `StellarRepApp` (depends on `StellarRep`, holds only the entry point) as separate products, and `OnboardingView` is `public` so the app target can see it across the module boundary. Friendbot funding gated behind `NetworkConfig.isTestnet` (currently a hardcoded `true`, checked at the one call site that matters). 9 tests pass: 8 fast/offline `KeychainWalletManagerTests` plus one deliberately real, unmocked `OnboardingIntegrationTests` test that generates a keypair, funds it via live Friendbot, and confirms a genuine 10,000 XLM balance from Horizon (~19s) — this is what actually proves the Phase 4 "done when" bar rather than a mocked stand-in. Verified building on macOS host (`swift build`, `swift test`) and iOS Simulator for both schemes (`StellarRep` and `StellarRepApp`).
 
-**Phase 5 — done.** `ReputationService` wraps the Phase 3 generated `ReputationContract` client behind `ReputationServiceProtocol` (`registerWorker`, `submitReview`, `getReputation`, `getReviews`) using app-facing `WorkerProfile`/`Review` models, never exposing generated or `stellarsdk` types to ViewModels. Contract-vs-network error distinction confirmed empirically, not assumed: calling `register_worker` twice throws `AssembledTransactionError.simulationFailed` with message text containing `Error(Contract, #1)` — `ReputationService.run(_:)` regex-extracts that code and maps it to a typed `ReputationServiceError.contract(ReputationContractErrorError)`, distinct from `.network(String)`. `ContractCallState<Success>` (`.idle`/`.pending`/`.succeeded`/`.failed`) is the reusable pending/failed pattern every future contract-calling ViewModel should use; `RegistrationViewModel` is the first real consumer (registers a wallet as a worker — no View yet, that's Phase 6). Found and fixed a real bug in the mocked tests along the way: a `Task.yield()`-based synchronization guess between the test and a controllable mock was an actual race (silently no-op'd the resume, hanging `await task.value` forever) — replaced with a deterministic `AsyncStream`-buffered signal. 14 tests pass total: the existing 9 from Phase 4, 3 fast/offline `RegistrationViewModelTests` proving the pending/contract-error/network-error states individually, and 2 real, unmocked `ReputationServiceIntegrationTests` — one full register → submit_review → get_reputation → get_reviews loop against live testnet through `ReputationService` itself (not the raw generated client), and one confirming a duplicate registration surfaces as the typed `.contract(.AlreadyRegistered)` case end-to-end. Verified on macOS host and iOS Simulator for both schemes. Next: **Phase 6 — Core UI Flows**, per `docs/ROADMAP.md`. Update this section as phases complete so anyone (human or Claude) picking this repo back up knows where to resume without re-reading everything.
+**Phase 5 — done.** `ReputationService` wraps the Phase 3 generated `ReputationContract` client behind `ReputationServiceProtocol` (`registerWorker`, `submitReview`, `getReputation`, `getReviews`) using app-facing `WorkerProfile`/`Review` models, never exposing generated or `stellarsdk` types to ViewModels. Contract-vs-network error distinction confirmed empirically, not assumed: calling `register_worker` twice throws `AssembledTransactionError.simulationFailed` with message text containing `Error(Contract, #1)` — `ReputationService.run(_:)` regex-extracts that code and maps it to a typed `ReputationServiceError.contract(ReputationContractErrorError)`, distinct from `.network(String)`. `ContractCallState<Success>` (`.idle`/`.pending`/`.succeeded`/`.failed`) is the reusable pending/failed pattern every future contract-calling ViewModel should use; `RegistrationViewModel` is the first real consumer (registers a wallet as a worker — no View yet, that's Phase 6). Found and fixed a real bug in the mocked tests along the way: a `Task.yield()`-based synchronization guess between the test and a controllable mock was an actual race (silently no-op'd the resume, hanging `await task.value` forever) — replaced with a deterministic `AsyncStream`-buffered signal. 14 tests pass total: the existing 9 from Phase 4, 3 fast/offline `RegistrationViewModelTests` proving the pending/contract-error/network-error states individually, and 2 real, unmocked `ReputationServiceIntegrationTests` — one full register → submit_review → get_reputation → get_reviews loop against live testnet through `ReputationService` itself (not the raw generated client), and one confirming a duplicate registration surfaces as the typed `.contract(.AlreadyRegistered)` case end-to-end. Verified on macOS host and iOS Simulator for both schemes.
+
+**Post-Phase-5: split into the multi-repo org layout** described above. `git subtree split --prefix=<dir> -b split-<dir>` on the monorepo, pushed each resulting branch to `main` on the new repo — full history preserved, not squashed. This umbrella repo had `contracts/`, `app/`, `docs/` removed after the split. Next: **Phase 6 — Core UI Flows**, per `docs/ROADMAP.md` (now in the `StellarRep/docs` repo). Update this section as phases complete so anyone (human or Claude) picking this repo back up knows where to resume without re-reading everything.
 
 ## Tech stack
 
@@ -46,15 +61,26 @@ Every repo on the approved list at scoping time was TypeScript/web-first with Ru
 ## Where things live
 
 ```
-.
-├── CLAUDE.md                 ← you are here
-├── docs/
-│   ├── ROADMAP.md             ← phased build plan — start here for "what do I do first"
-│   ├── ARCHITECTURE.md        ← system design, data flow, security posture, non-goals
-│   ├── CONTRACT_SPEC.md       ← Soroban contract: storage, functions, errors, events
-│   └── APP_SPEC.md            ← Swift app: structure, screens, SDK usage
-├── contracts/                 ← not yet created — Phase 1
-└── app/                       ← not yet created — Phase 4
+StellarRep/StellarRep (this repo)
+└── CLAUDE.md                  ← you are here; no source code in this repo
+
+StellarRep/docs
+├── ROADMAP.md                 ← phased build plan — start here for "what do I do first"
+├── ARCHITECTURE.md            ← system design, data flow, security posture, non-goals
+├── CONTRACT_SPEC.md           ← Soroban contract: storage, functions, errors, events
+└── APP_SPEC.md                ← Swift app: structure, screens, SDK usage
+
+StellarRep/contracts
+├── Cargo.toml                 ← workspace root
+└── reputation/                ← the reputation contract crate
+    ├── src/lib.rs
+    └── DEPLOYED.md             ← testnet contract ID, tx hashes, manual verification
+
+StellarRep/app
+├── Package.swift               ← SPM-first, two targets: StellarRep (library) + StellarRepApp (@main)
+├── Sources/StellarRep/         ← Core/, Features/, Models/, Generated/
+├── Sources/StellarRepApp/      ← just the @main entry point
+└── Tests/StellarRepTests/
 ```
 
 ## Useful external references
